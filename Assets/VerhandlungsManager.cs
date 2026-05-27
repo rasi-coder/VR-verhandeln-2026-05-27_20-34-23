@@ -9,7 +9,7 @@ public class NegotiationManager : MonoBehaviour
 {
     [Header("OpenRouter Settings")]
     private string baseUrl = "https://openrouter.ai/api/v1/chat/completions";
-    private string apiKey = "REMOVED";
+    private string apiKey;
 
     [Header("UI")]
     public TextMeshProUGUI subtitleText;
@@ -23,6 +23,13 @@ public class NegotiationManager : MonoBehaviour
         "Du sprichst formelles Deutsch (Sie-Form). " +
         "Reagiere realistisch auf die Argumente des Mitarbeiters. " +
         "Halte deine Antworten kurz - maximal 3 Sätze.";
+
+    [System.Serializable]
+    private class Config
+    {
+        public string apiKey;
+    }
+    // ----------------
 
     [System.Serializable]
     public class Message
@@ -51,15 +58,29 @@ public class NegotiationManager : MonoBehaviour
         public Message message;
     }
 
+    void Awake()
+    {
+        // --- ADD THIS ---
+        TextAsset configFile = Resources.Load<TextAsset>("Config");
+        if (configFile != null)
+        {
+            Config config = JsonUtility.FromJson<Config>(configFile.text);
+            apiKey = config.apiKey;
+        }
+        else
+        {
+            Debug.LogError("Config.json not found in Resources folder!");
+        }
+        // ----------------
+    }
+
     void Start()
     {
-        // Add system prompt as first message
         conversationHistory.Add(new Message {
             role = "system",
             content = systemPrompt
         });
 
-        // Thomas opens the conversation
         StartCoroutine(SendToOpenRouter("Guten Tag, Sie wollten mich sprechen?"));
     }
 
@@ -73,13 +94,11 @@ public class NegotiationManager : MonoBehaviour
         if (subtitleText != null)
             subtitleText.text = "Thomas denkt nach...";
 
-        // Add user message to history
         conversationHistory.Add(new Message {
             role = "user",
             content = userMessage
         });
 
-        // Build request
         OpenRouterRequest request = new OpenRouterRequest
         {
             messages = conversationHistory
@@ -106,7 +125,6 @@ public class NegotiationManager : MonoBehaviour
             OpenRouterResponse response = JsonUtility.FromJson<OpenRouterResponse>(rawResponse);
             string replyText = response.choices[0].message.content;
 
-            // Add assistant response to history
             conversationHistory.Add(new Message {
                 role = "assistant",
                 content = replyText
@@ -121,7 +139,6 @@ public class NegotiationManager : MonoBehaviour
         {
             Debug.LogError("Error: " + www.error);
             Debug.LogError("Response: " + www.downloadHandler.text);
-
             if (subtitleText != null)
                 subtitleText.text = "Verbindungsfehler. Bitte versuchen Sie es erneut.";
         }

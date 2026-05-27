@@ -843,9 +843,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 2104535078}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 485a0bfe5c00d4ab1860b35370b95ee8, type: 3}
+  m_Script: {fileID: 11500000, guid: 2d92ee820c6aa4df6a182af1e882128e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VerhandlungsManager
+  subtitleText: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

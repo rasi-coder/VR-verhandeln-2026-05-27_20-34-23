@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.Collections;
 using System.IO;
+using System.Linq;
+
 
 public class VoiceInput : MonoBehaviour
 {
@@ -38,7 +40,15 @@ public class VoiceInput : MonoBehaviour
 
     void Update()
     {
-      if (UnityEngine.InputSystem.Keyboard.current.spaceKey.wasPressedThisFrame)
+      bool spacePressed = UnityEngine.InputSystem.Keyboard.current != null &&
+          UnityEngine.InputSystem.Keyboard.current.spaceKey.wasPressedThisFrame;
+
+      bool aButtonPressed = UnityEngine.InputSystem.InputSystem.devices
+          .OfType<UnityEngine.InputSystem.XR.XRController>()
+          .Any(c => c.TryGetChildControl<UnityEngine.InputSystem.Controls.ButtonControl>("primaryButton")
+              is var btn && btn != null && btn.wasPressedThisFrame);
+
+      if (spacePressed || aButtonPressed)
         {
             if (!isRecording)
                 StartRecording();

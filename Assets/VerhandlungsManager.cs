@@ -9,15 +9,19 @@ public class NegotiationManager : MonoBehaviour
 {
     [Header("OpenRouter Settings")]
     private string baseUrl = "https://openrouter.ai/api/v1/chat/completions";
-    private string apiKey;
+    private string openRouterKey;
+    private string openAIKey;
 
     [Header("UI")]
     public TextMeshProUGUI subtitleText;
 
+    [Header("Audio")]
+    public AudioSource audioSource;
+
     private List<Message> conversationHistory = new List<Message>();
 
     private string systemPrompt =
-        "Du bist Thomas Bauer, 48 Jahre alt, Abteilungsleiter HR in einem " +
+        "Du bist Susie Bauer, 48 Jahre alt, Abteilungsleiterin HR in einem " +
         "mittelgroßen deutschen Unternehmen. Du bist professionell, " +
         "aber zunächst skeptisch gegenüber Gehaltserhöhungen. " +
         "Du sprichst formelles Deutsch (Sie-Form). " +
@@ -27,9 +31,9 @@ public class NegotiationManager : MonoBehaviour
     [System.Serializable]
     private class Config
     {
-        public string apiKey;
+        public string openrouter_api_key;
+        public string openai_api_key;
     }
-    // ----------------
 
     [System.Serializable]
     public class Message
@@ -41,7 +45,7 @@ public class NegotiationManager : MonoBehaviour
     [System.Serializable]
     private class OpenRouterRequest
     {
-        public string model = "anthropic/claude-opus-4";
+        public string model = "anthropic/claude-haiku-4-5";
         public int max_tokens = 1024;
         public List<Message> messages;
     }
@@ -58,20 +62,34 @@ public class NegotiationManager : MonoBehaviour
         public Message message;
     }
 
+    [System.Serializable]
+    private class TTSRequest
+    {
+        public string model = "tts-1";
+        public string input;
+        public string voice = "nova";
+    }
+
     void Awake()
     {
-        // --- ADD THIS ---
         TextAsset configFile = Resources.Load<TextAsset>("Config");
         if (configFile != null)
         {
             Config config = JsonUtility.FromJson<Config>(configFile.text);
-            apiKey = config.apiKey;
+            openRouterKey = config.openrouter_api_key;
+            openAIKey = config.openai_api_key;
+            Debug.Log("Config geladen!");
         }
         else
         {
             Debug.LogError("Config.json not found in Resources folder!");
         }
-        // ----------------
+
+        // Auto-find AudioSource if not assigned
+        if (audioSource == null)
+            audioSource = GetComponent<AudioSource>();
+        Debug.Log("AudioSource found: " + (audioSource == null ? "NO" : "YES"));
+
     }
 
     void Start()
@@ -92,7 +110,7 @@ public class NegotiationManager : MonoBehaviour
     private IEnumerator SendToOpenRouter(string userMessage)
     {
         if (subtitleText != null)
-            subtitleText.text = "Thomas denkt nach...";
+            subtitleText.text = "Susie denkt nach...";
 
         conversationHistory.Add(new Message {
             role = "user",
@@ -111,7 +129,7 @@ public class NegotiationManager : MonoBehaviour
         www.uploadHandler = new UploadHandlerRaw(bodyRaw);
         www.downloadHandler = new DownloadHandlerBuffer();
         www.SetRequestHeader("Content-Type", "application/json");
-        www.SetRequestHeader("Authorization", "Bearer " + apiKey);
+        www.SetRequestHeader("Authorization", "Bearer " + openRouterKey);
         www.SetRequestHeader("HTTP-Referer", "https://unity.com");
         www.SetRequestHeader("X-Title", "VR Negotiation Training");
 
@@ -133,7 +151,9 @@ public class NegotiationManager : MonoBehaviour
             if (subtitleText != null)
                 subtitleText.text = replyText;
 
-            Debug.Log("Thomas: " + replyText);
+            Debug.Log("Susie: " + replyText);
+            Debug.Log("Sending to TTS: " + replyText.Substring(0, Mathf.Min(50, replyText.Length)));
+            StartCoroutine(SpeakText(replyText));
         }
         else
         {
@@ -141,6 +161,41 @@ public class NegotiationManager : MonoBehaviour
             Debug.LogError("Response: " + www.downloadHandler.text);
             if (subtitleText != null)
                 subtitleText.text = "Verbindungsfehler. Bitte versuchen Sie es erneut.";
+        }
+    }
+
+    private IEnumerator SpeakText(string text)
+    {
+        TTSRequest ttsRequest = new TTSRequest { input = text };
+        string jsonBody = JsonUtility.ToJson(ttsRequest);
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
+
+        UnityWebRequest www = new UnityWebRequest(
+            "https://api.openai.com/v1/audio/speech", "POST");
+        www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+        www.downloadHandler = new DownloadHandlerAudioClip(
+            "https://api.openai.com/v1/audio/speech", AudioType.MPEG);
+        www.SetRequestHeader("Content-Type", "application/json");
+        www.SetRequestHeader("Authorization", "Bearer " + openAIKey);
+
+        yield return www.SendWebRequest();
+
+        if (www.result == UnityWebRequest.Result.Success)
+        {
+            AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
+            Debug.Log("Clip: " + (clip == null ? "NULL" : clip.length + "s"));
+            Debug.Log("AudioSource: " + (audioSource == null ? "NULL" : "found"));
+            if (audioSource != null && clip != null)
+            {
+                audioSource.clip = clip;
+                audioSource.Play();
+                Debug.Log("Susie spricht...");
+            }
+        }
+        else
+        {
+            Debug.LogError("TTS Fehler: " + www.error);
+            Debug.LogError("TTS Response: " + www.downloadHandler.text);
         }
     }
 }

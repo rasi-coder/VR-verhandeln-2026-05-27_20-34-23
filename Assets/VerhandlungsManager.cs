@@ -11,6 +11,9 @@ public class NegotiationManager : MonoBehaviour
     private string baseUrl = "https://openrouter.ai/api/v1/chat/completions";
     private string openRouterKey;
     private string openAIKey;
+    private Animator animator;
+    public float talkingY = 0f;
+    public float idleY = 0f;
 
     [Header("UI")]
     public TextMeshProUGUI subtitleText;
@@ -90,6 +93,8 @@ public class NegotiationManager : MonoBehaviour
             audioSource = GetComponent<AudioSource>();
         Debug.Log("AudioSource found: " + (audioSource == null ? "NO" : "YES"));
 
+        animator = GetComponent<Animator>();
+        Debug.Log("Animator found: " + (animator == null ? "NO" : "YES"));
     }
 
     void Start()
@@ -187,9 +192,13 @@ public class NegotiationManager : MonoBehaviour
             Debug.Log("AudioSource: " + (audioSource == null ? "NULL" : "found"));
             if (audioSource != null && clip != null)
             {
-                audioSource.clip = clip;
-                audioSource.Play();
-                Debug.Log("Susie spricht...");
+              audioSource.clip = clip;
+              audioSource.Play();
+              animator.SetBool("isTalking", true);
+
+              yield return new WaitWhile(() => audioSource.isPlaying);
+
+              animator.SetBool("isTalking", false);
             }
         }
         else

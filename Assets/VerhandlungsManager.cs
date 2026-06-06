@@ -22,14 +22,16 @@ public class NegotiationManager : MonoBehaviour
     public AudioSource audioSource;
 
     private List<Message> conversationHistory = new List<Message>();
+    private VoiceInput voiceInput;
 
-    private string systemPrompt =
-        "Du bist Susie Bauer, 48 Jahre alt, Abteilungsleiterin HR in einem " +
-        "mittelgroßen deutschen Unternehmen. Du bist professionell, " +
-        "aber zunächst skeptisch gegenüber Gehaltserhöhungen. " +
-        "Du sprichst formelles Deutsch (Sie-Form). " +
-        "Reagiere realistisch auf die Argumente des Mitarbeiters. " +
-        "Halte deine Antworten kurz - maximal 3 Sätze.";
+    private string LoadPrompt(string filename)
+    {
+        TextAsset file = Resources.Load<TextAsset>(filename);
+        if (file != null)
+            return file.text;
+        Debug.LogError("Prompt file not found: " + filename);
+        return "";
+    }
 
     [System.Serializable]
     private class Config
@@ -88,23 +90,49 @@ public class NegotiationManager : MonoBehaviour
             Debug.LogError("Config.json not found in Resources folder!");
         }
 
-        // Auto-find AudioSource if not assigned
         if (audioSource == null)
             audioSource = GetComponent<AudioSource>();
-        Debug.Log("AudioSource found: " + (audioSource == null ? "NO" : "YES"));
 
         animator = GetComponent<Animator>();
-        Debug.Log("Animator found: " + (animator == null ? "NO" : "YES"));
+        voiceInput = GetComponent<VoiceInput>();
     }
 
     void Start()
     {
+        // nichts, wartet erst auf Briefing
+    }
+
+    public void StartConversation()
+    {
+        string variantPrompt = LevelSelector.SelectedPromptVariant switch
+        {
+            "unterstützend" => LoadPrompt("PromptUnterstützend"),
+            "streng" => LoadPrompt("PromptStreng"),
+            _ => LoadPrompt("PromptNeutral")
+        };
+
+        string lengthInstruction = longAnswers
+            ? ""
+            : "Halte deine Antworten kurz - maximal 50 Wörter.";
+
+        string fullPrompt = LoadPrompt("PromptBase")
+            .Replace("{{PERSONALITY}}", variantPrompt)
+            .Replace("{{LENGTH}}", lengthInstruction);
+
         conversationHistory.Add(new Message {
             role = "system",
-            content = systemPrompt
+            content = fullPrompt
         });
 
         StartCoroutine(SendToOpenRouter("Guten Tag, Sie wollten mich sprechen?"));
+    }
+
+    void Update()
+    {
+        #if UNITY_EDITOR // skip dialogue by pressing d on keyboard (not in glasses)
+        if (UnityEngine.InputSystem.Keyboard.current.dKey.wasPressedThisFrame)
+            StartCoroutine(StartFeedback());
+        #endif
     }
 
     public void SendUserMessage(string userMessage)
@@ -112,10 +140,30 @@ public class NegotiationManager : MonoBehaviour
         StartCoroutine(SendToOpenRouter(userMessage));
     }
 
+    public void DebugSkipToEnd()
+    {
+        StartCoroutine(StartFeedback());
+    }
+
+    public void ToggleSubtitles()
+    {
+        if (subtitleText != null)
+            subtitleText.transform.parent.gameObject.SetActive(
+                !subtitleText.transform.parent.gameObject.activeSelf);
+    }
+
+    private bool longAnswers = false;
+
+    public void ToggleAnswerLength()
+    {
+        longAnswers = !longAnswers;
+        Debug.Log("Answer length: " + (longAnswers ? "long" : "short"));
+    }
+
     private IEnumerator SendToOpenRouter(string userMessage)
     {
         if (subtitleText != null)
-            subtitleText.text = "Susie denkt nach...";
+            subtitleText.text = "Frau Schneider denkt nach...";
 
         conversationHistory.Add(new Message {
             role = "user",
@@ -143,22 +191,26 @@ public class NegotiationManager : MonoBehaviour
         if (www.result == UnityWebRequest.Result.Success)
         {
             string rawResponse = www.downloadHandler.text;
-            Debug.Log("Raw response: " + rawResponse);
-
             OpenRouterResponse response = JsonUtility.FromJson<OpenRouterResponse>(rawResponse);
             string replyText = response.choices[0].message.content;
 
+            // Detect end marker
+            bool isEnd = replyText.Contains("[ENDE]");
+            string cleanedReply = replyText.Replace("[ENDE]", "").Trim();
+
             conversationHistory.Add(new Message {
                 role = "assistant",
-                content = replyText
+                content = cleanedReply
             });
 
             if (subtitleText != null)
-                subtitleText.text = replyText;
+                subtitleText.text = cleanedReply;
 
-            Debug.Log("Susie: " + replyText);
-            Debug.Log("Sending to TTS: " + replyText.Substring(0, Mathf.Min(50, replyText.Length)));
-            StartCoroutine(SpeakText(replyText));
+            Debug.Log("Frau Schneider: " + cleanedReply);
+            StartCoroutine(SpeakText(cleanedReply));
+
+            if (isEnd)
+                StartCoroutine(StartFeedback());
         }
         else
         {
@@ -167,6 +219,37 @@ public class NegotiationManager : MonoBehaviour
             if (subtitleText != null)
                 subtitleText.text = "Verbindungsfehler. Bitte versuchen Sie es erneut.";
         }
+    }
+
+    private IEnumerator StartFeedback()
+    {
+        // Wait for Frau Schneider to finish speaking
+        yield return new WaitWhile(() => audioSource.isPlaying);
+
+        // Disable voice input so user can't keep talking
+        if (voiceInput != null)
+            voiceInput.enabled = false;
+
+        // Build full transcript from conversation history (skip system prompt at index 0)
+        StringBuilder transcript = new StringBuilder();
+        transcript.AppendLine("=== Gesprächsprotokoll ===\n");
+
+        for (int i = 1; i < conversationHistory.Count; i++)
+        {
+            Message msg = conversationHistory[i];
+            if (msg.role == "user")
+                transcript.AppendLine("Sie: " + msg.content + "\n");
+            else if (msg.role == "assistant")
+                transcript.AppendLine("Frau Schneider: " + msg.content + "\n");
+        }
+
+        // TODO: feedback — send transcript to feedback API here and append result
+        // string feedbackPrompt = LoadPrompt("PromptFeedback");
+        // StartCoroutine(SendFeedbackRequest(transcript.ToString(), feedbackPrompt));
+
+        // For now, just show the transcript
+        if (subtitleText != null)
+            subtitleText.text = transcript.ToString();
     }
 
     private IEnumerator SpeakText(string text)
@@ -188,17 +271,15 @@ public class NegotiationManager : MonoBehaviour
         if (www.result == UnityWebRequest.Result.Success)
         {
             AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
-            Debug.Log("Clip: " + (clip == null ? "NULL" : clip.length + "s"));
-            Debug.Log("AudioSource: " + (audioSource == null ? "NULL" : "found"));
             if (audioSource != null && clip != null)
             {
-              audioSource.clip = clip;
-              audioSource.Play();
-              animator.SetBool("isTalking", true);
+                audioSource.clip = clip;
+                audioSource.Play();
+                animator.SetBool("isTalking", true);
 
-              yield return new WaitWhile(() => audioSource.isPlaying);
+                yield return new WaitWhile(() => audioSource.isPlaying);
 
-              animator.SetBool("isTalking", false);
+                animator.SetBool("isTalking", false);
             }
         }
         else

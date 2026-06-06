@@ -116,9 +116,22 @@ public class NegotiationManager : MonoBehaviour
         StartCoroutine(SendToOpenRouter("Guten Tag, Sie wollten mich sprechen?"));
     }
 
+    void Update()
+    {
+        #if UNITY_EDITOR // skip dialogue by pressing d on keyboard (not in glasses)
+        if (UnityEngine.InputSystem.Keyboard.current.dKey.wasPressedThisFrame)
+            StartCoroutine(StartFeedback());
+        #endif
+    }
+
     public void SendUserMessage(string userMessage)
     {
         StartCoroutine(SendToOpenRouter(userMessage));
+    }
+
+    public void DebugSkipToEnd()
+    {
+        StartCoroutine(StartFeedback());
     }
 
     private IEnumerator SendToOpenRouter(string userMessage)

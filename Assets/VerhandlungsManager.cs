@@ -99,14 +99,25 @@ public class NegotiationManager : MonoBehaviour
 
     void Start()
     {
-      string variantPrompt = LevelSelector.SelectedPromptVariant switch
-      {
-        "unterstützend" => LoadPrompt("PromptUnterstützend"),
-        "streng" => LoadPrompt("PromptStreng"),
-        _ => LoadPrompt("PromptNeutral")
-      };
+        // nichts, wartet erst auf Briefing
+    }
 
-      string fullPrompt = LoadPrompt("PromptBase").Replace("{{PERSONALITY}}", variantPrompt);
+    public void StartConversation()
+    {
+        string variantPrompt = LevelSelector.SelectedPromptVariant switch
+        {
+            "unterstützend" => LoadPrompt("PromptUnterstützend"),
+            "streng" => LoadPrompt("PromptStreng"),
+            _ => LoadPrompt("PromptNeutral")
+        };
+
+        string lengthInstruction = longAnswers
+            ? ""
+            : "Halte deine Antworten kurz - maximal 50 Wörter.";
+
+        string fullPrompt = LoadPrompt("PromptBase")
+            .Replace("{{PERSONALITY}}", variantPrompt)
+            .Replace("{{LENGTH}}", lengthInstruction);
 
         conversationHistory.Add(new Message {
             role = "system",
@@ -132,6 +143,21 @@ public class NegotiationManager : MonoBehaviour
     public void DebugSkipToEnd()
     {
         StartCoroutine(StartFeedback());
+    }
+
+    public void ToggleSubtitles()
+    {
+        if (subtitleText != null)
+            subtitleText.transform.parent.gameObject.SetActive(
+                !subtitleText.transform.parent.gameObject.activeSelf);
+    }
+
+    private bool longAnswers = false;
+
+    public void ToggleAnswerLength()
+    {
+        longAnswers = !longAnswers;
+        Debug.Log("Answer length: " + (longAnswers ? "long" : "short"));
     }
 
     private IEnumerator SendToOpenRouter(string userMessage)

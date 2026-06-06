@@ -8,7 +8,7 @@ using System.Linq;
 public class VoiceInput : MonoBehaviour
 {
     [Header("Recording Settings")]
-    private int recordingDuration = 30;
+    private int recordingDuration = 200;
     private int sampleRate = 16000;
 
     private string apiKey;

@@ -20,4 +20,10 @@ public class LevelSelectionManager : MonoBehaviour
         LevelSelector.SelectedPromptVariant = "streng";
         SceneManager.LoadScene(2);
     }
+
+    public void ToggleAnswerLength(bool isOn)
+    {
+        LevelSelector.LongAnswers = isOn;
+        Debug.Log("Long answers: " + isOn);
+    }
 }

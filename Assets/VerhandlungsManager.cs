@@ -99,11 +99,6 @@ public class NegotiationManager : MonoBehaviour
 
     void Start()
     {
-        // nichts, wartet erst auf Briefing
-    }
-
-    public void StartConversation()
-    {
         string variantPrompt = LevelSelector.SelectedPromptVariant switch
         {
             "unterstützend" => LoadPrompt("PromptUnterstützend"),
@@ -111,7 +106,7 @@ public class NegotiationManager : MonoBehaviour
             _ => LoadPrompt("PromptNeutral")
         };
 
-        string lengthInstruction = longAnswers
+        string lengthInstruction = LevelSelector.LongAnswers
             ? ""
             : "Halte deine Antworten kurz - maximal 50 Wörter.";
 

@@ -6,18 +6,18 @@ public class LevelSelectionManager : MonoBehaviour
     public void SelectUnterstützend()
     {
         LevelSelector.SelectedPromptVariant = "unterstützend";
-        SceneManager.LoadScene(1);
+        SceneManager.LoadScene(2);
     }
 
     public void SelectNeutral()
     {
         LevelSelector.SelectedPromptVariant = "neutral";
-        SceneManager.LoadScene(1);
+        SceneManager.LoadScene(2);
     }
 
     public void SelectStreng()
     {
         LevelSelector.SelectedPromptVariant = "streng";
-        SceneManager.LoadScene(1);
+        SceneManager.LoadScene(2);
     }
 }

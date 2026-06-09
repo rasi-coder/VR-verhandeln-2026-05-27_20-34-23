@@ -106,9 +106,17 @@ public class NegotiationManager : MonoBehaviour
             _ => LoadPrompt("PromptNeutral")
         };
 
-        string lengthInstruction = LevelSelector.LongAnswers
-            ? ""
-            : "Halte deine Antworten kurz - maximal 50 Wörter.";
+        string lengthInstruction;
+          if (LevelSelector.LongAnswers)
+          {
+          Debug.Log("Answer length: LONG");
+          lengthInstruction = "";
+          }
+          else
+          {
+          Debug.Log("Answer length: SHORT - max 50 words");
+          lengthInstruction = "Halte deine Antworten kurz - maximal 50 Wörter.";
+          }
 
         string fullPrompt = LoadPrompt("PromptBase")
             .Replace("{{PERSONALITY}}", variantPrompt)

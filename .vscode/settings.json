@@ -60,13 +60,13 @@
         "*.asset": "yaml",
         "*.meta": "yaml",
         "*.prefab": "yaml",
-        "*.unity": "yaml",
+        "*.unity": "yaml"
     },
     "explorer.fileNesting.enabled": true,
     "explorer.fileNesting.patterns": {
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "VR-verhandeln-2026-05-27_20-34-23.slnx",
+    "dotnet.defaultSolution": "VR-verhandeln.slnx",
     "dotnet.enableWorkspaceBasedDevelopment": false
 }

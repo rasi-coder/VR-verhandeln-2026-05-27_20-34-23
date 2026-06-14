@@ -17,6 +17,7 @@ public class NegotiationManager : MonoBehaviour
 
     [Header("UI")]
     public TextMeshProUGUI subtitleText;
+    public TextMeshProUGUI feedbackText;
 
     [Header("Audio")]
     public AudioSource audioSource;
@@ -237,7 +238,7 @@ public class NegotiationManager : MonoBehaviour
         StringBuilder transcript = new StringBuilder();
         transcript.AppendLine("=== Gesprächsprotokoll ===\n");
 
-        for (int i = 1; i < conversationHistory.Count; i++)
+        for (int i = 2; i < conversationHistory.Count; i++)
         {
             Message msg = conversationHistory[i];
             if (msg.role == "user")
@@ -246,13 +247,121 @@ public class NegotiationManager : MonoBehaviour
                 transcript.AppendLine("Frau Schneider: " + msg.content + "\n");
         }
 
-        // TODO: feedback — send transcript to feedback API here and append result
-        // string feedbackPrompt = LoadPrompt("PromptFeedback");
-        // StartCoroutine(SendFeedbackRequest(transcript.ToString(), feedbackPrompt));
+        string transcriptStr = transcript.ToString();
 
-        // For now, just show the transcript
         if (subtitleText != null)
-            subtitleText.text = transcript.ToString();
+            subtitleText.text = transcriptStr;
+
+        string feedbackPrompt = LoadPrompt("PromptFeedback")
+            .Replace("{{TRANSCRIPT}}", transcriptStr);
+        StartCoroutine(SendFeedbackRequest(feedbackPrompt, transcriptStr));
+    }
+
+    private IEnumerator SendFeedbackRequest(string feedbackPrompt, string transcriptStr)
+    {
+        if (feedbackText != null)
+            feedbackText.text = "Feedback wird geladen...";
+
+        OpenRouterRequest request = new OpenRouterRequest
+        {
+            messages = new List<Message>
+            {
+                new Message { role = "user", content = feedbackPrompt }
+            }
+        };
+
+        string jsonBody = JsonUtility.ToJson(request);
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
+
+        UnityWebRequest www = new UnityWebRequest(baseUrl, "POST");
+        www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+        www.downloadHandler = new DownloadHandlerBuffer();
+        www.SetRequestHeader("Content-Type", "application/json");
+        www.SetRequestHeader("Authorization", "Bearer " + openRouterKey);
+        www.SetRequestHeader("HTTP-Referer", "https://unity.com");
+        www.SetRequestHeader("X-Title", "VR Negotiation Training");
+
+        yield return www.SendWebRequest();
+
+        if (www.result == UnityWebRequest.Result.Success)
+        {
+            string raw = www.downloadHandler.text;
+            OpenRouterResponse response = JsonUtility.FromJson<OpenRouterResponse>(raw);
+            string replyText = response.choices[0].message.content;
+
+            ParseFeedbackResponse(replyText,
+                out string feedbackBody,
+                out List<string> positiveQuotes,
+                out List<string> improvementQuotes);
+
+            if (subtitleText != null)
+                subtitleText.text = ApplyHighlights(transcriptStr, positiveQuotes, improvementQuotes);
+
+            if (feedbackText != null)
+                feedbackText.text = feedbackBody;
+
+            Debug.Log("Feedback: " + feedbackBody);
+        }
+        else
+        {
+            Debug.LogError("Feedback Fehler: " + www.error);
+            if (feedbackText != null)
+                feedbackText.text = "Feedback konnte nicht geladen werden.";
+        }
+    }
+
+    private void ParseFeedbackResponse(string response,
+        out string feedbackBody,
+        out List<string> positiveQuotes,
+        out List<string> improvementQuotes)
+    {
+        feedbackBody = "";
+        positiveQuotes = new List<string>();
+        improvementQuotes = new List<string>();
+
+        string currentSection = "";
+        System.Text.StringBuilder feedbackBuilder = new System.Text.StringBuilder();
+
+        foreach (string rawLine in response.Split('\n'))
+        {
+            string line = rawLine.Trim();
+
+            if (line == "FEEDBACK:")               { currentSection = "feedback"; continue; }
+            if (line == "HIGHLIGHTS_POSITIV:")     { currentSection = "positiv"; continue; }
+            if (line == "HIGHLIGHTS_VERBESSERUNG:"){ currentSection = "verbesserung"; continue; }
+
+            if (string.IsNullOrEmpty(line)) continue;
+
+            switch (currentSection)
+            {
+                case "feedback":
+                    feedbackBuilder.AppendLine(line);
+                    break;
+                case "positiv":
+                    positiveQuotes.Add(line);
+                    break;
+                case "verbesserung":
+                    improvementQuotes.Add(line);
+                    break;
+            }
+        }
+
+        feedbackBody = feedbackBuilder.ToString().Trim();
+    }
+
+    private string ApplyHighlights(string transcript,
+        List<string> positiveQuotes,
+        List<string> improvementQuotes)
+    {
+        foreach (string quote in positiveQuotes)
+            if (!string.IsNullOrEmpty(quote))
+                transcript = transcript.Replace(quote, $"<mark=#00C85080>{quote}</mark>");
+
+        foreach (string quote in improvementQuotes)
+            if (!string.IsNullOrEmpty(quote))
+                transcript = transcript.Replace(quote, $"<mark=#FF990080>{quote}</mark>");
+
+        return transcript;
     }
 
     private IEnumerator SpeakText(string text)
